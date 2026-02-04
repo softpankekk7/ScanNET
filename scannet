@@ -1,0 +1,254 @@
+#!/usr/bin/python3
+
+# Adknowledgments
+
+# Function - ping()
+# Source - https://stackoverflow.com/a/32684938
+# Posted by ePi272314, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-02-04, License - CC BY-SA 4.0
+
+# Common Ports
+# Source - https://www.bing.com/search?q=common+open+ports
+# Source - https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers
+# Retrieved 2026-02-04, License - Unknown
+
+import platform 
+import subprocess
+import sys
+import socket
+
+version = 1.0
+
+args = {
+    "hostname": None,
+    "timeout" : 0.1,
+    "method"  : "ping",
+    "ports"   : "common",
+    "pipeMode": False
+}
+
+def help_me(long):
+    print(f"ScanNet v{version} Help")
+    print("-----------------------")
+    print("Usage: python3 scannet [options]")
+
+    print("\n\nArguments:")
+    print("-h         :  Help menu")
+    print("-hl        :  LONG Help menu")
+    print("--version  :  Version #")
+    print("--hostname :  Set hostname")
+    print("-t         :  Timeout for scanning (sec)")
+    print("-m         :  Method of scanning [ping/socket]")
+    print("-p         :  Scan ports [minimal/common/bigcommon/web/remote/mail]")
+    print("-P         :  pipeMode (Suppress INFO & WARN for automation)")
+
+    if long:
+        print("========================")
+        print("Scan ports")
+        print("(ordered chronologically)\n")
+        print("minimal : 80, 443, 22")
+        print("""common  : 80, 443, 8080, 
+            8000, 8082, 81, 
+            5000, 22, 23, 
+            3389, 25, 995, 
+            993, 143, 53, 
+            21, 139""")
+        print("""bigcommon: 80, 443, 8080, 
+            8000, 8082, 81, 
+            5000, 82, 22, 
+            23, 3389, 107, 
+            25, 995, 993, 
+            143, 110, 21, 
+            20, 161, 162, 
+            69, 53, 139, 
+            135, 1024, 389, 
+            113, 9, 101, 
+            137, 138, 139, 
+            156""")
+        print("========================")
+
+        
+    print("Examples:\n")
+
+    print("python3 scannet")
+    print("python3 scannet --hostname 8.8.8.x")
+    print("python3 scannet --hostname 192.168.x.x -P -m ping")
+    print("python3 scannet -P")
+
+    exit(0)
+
+for arg in range(len(sys.argv)):
+    arg2 = sys.argv[arg]
+    if   arg2 == "--hostname":args["hostname"] = sys.argv[arg+1].lower()
+    elif arg2 == "--version":
+        print(f"ScanNet v{version}")
+        exit(0)
+
+    elif arg2 == "-hl":help_me(True)
+    elif arg2 == "-h":help_me(False)
+
+    elif arg2 == "-t":args["timeout"]  = sys.argv[arg+1]
+    elif arg2 == "-m":args["method"]   = sys.argv[arg+1].lower()
+    elif arg2 == "-p":args["ports"]    = sys.argv[arg+1].lower()
+
+    elif arg2 == "-P":args["pipeMode"] = True
+
+class output:
+    def error(string="Unknown."):
+        print("\033[31m" + "ERROR " + "\033[0m" + ":  " + string)
+    def warn(string="Unknown."):
+        if not args["pipeMode"]:
+            print("\033[33m" + "WARN  " + "\033[0m" + ":  " + string)
+    def info(string="Unknown."):
+        if not args["pipeMode"]:
+            print("\033[34m" + "INFO  " + "\033[0m" + ":  " + string)
+
+port_type = "minimal"
+
+if port_type == "minimal":
+    common_ports = [
+        80, 443, # Web
+        22 # Remote Access
+    ]
+elif port_type == "common":
+    common_ports = [
+        80, 443, 8080, 8000, 8082, 81, 5000, # Web
+        22, 23, 3389, # Remote Access
+        25, 995, 993, 143, # Mail
+        53, 21, 139   # Misc
+    ]
+elif port_type == "web":
+    common_ports = [
+        80, 443, 8080, 8000, 8082, 81, 5000 # Web
+    ]
+elif port_type == "remote":
+    common_ports = [
+        22, 23, 3389, # Remote Access
+    ]
+elif port_type == "mail":
+    common_ports = [
+        25, 995, 993, 143, # Mail
+    ]
+elif port_type == "common":
+    common_ports = [
+        80, 443, 8080, 8000, 8082, 81, 5000, # Web
+        22, 23, 3389, # Remote Access
+        25, 995, 993, 143, # Mail
+        53, 21, 139   # Misc
+    ]
+elif port_type == "bigcommon":
+    common_ports = [
+        80, 443, 8080, 8000, 8082, 81, 5000, 82, # Web
+        22, 23, 3389, 107,  # Remote Access
+        25, 995, 993, 143, 110, # Mail
+        21, 20, 161, 162, 69, # File sharing
+        53, 139, 135, 1024, 389, 113, # Misc
+        9, 101, 137, 138, 139, 156    # Misc
+    ]
+else:
+    output.error("Invalid port list type.\n\nAvailible types: \n bigcommon, common, minimal")
+
+def clear_line():
+   sys.stdout.write('\033[A' + '\033[K')
+   
+
+def ping(host):
+    param = '-n' if platform.system().lower()=='windows' else '-c'
+    timeout = "-w" if platform.system().lower() == "windows" else "-W"
+    size = "-l" if platform.system().lower() == "windows" else "-s"
+
+    command = ['ping', param, '1', host, timeout, str(args["timeout"]), size, "1"]
+    return subprocess.call(command, stdout=subprocess.DEVNULL) == 0
+
+def socket_up(ip):
+    try:
+        for port in common_ports:
+            print(f"Testing Port:  {port}")
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            if isinstance(args["timeout"], float):
+                sock.settimeout(float(args["timeout"]))
+            else:
+                sock.settimeout(0.1)
+            result = sock.connect_ex((ip, port))
+            sock.close()
+            clear_line()
+            if result == 0:
+                return result == 0
+    except:
+        return False
+
+def check_online(host):
+    if args["method"].lower() == "ping":
+        return ping(host)
+    elif args["method"].lower() == "socket":
+        return socket_up(host)
+    else:
+        output.error("Invalid host checking method.\n\nAvailible Methods: \n ping, socket")
+        exit(3)
+
+def gen_ip(ip_filter):
+    ranges = []
+    return_ip = []
+
+    for i in range(4):
+        if ip_filter[i] is not None:
+            ranges.append([ip_filter[i]])
+        else:
+            ranges.append(range(256))
+
+    for o1 in ranges[0]:
+        for o2 in ranges[1]:
+            for o3 in ranges[2]:
+                for o4 in ranges[3]:
+                    return_ip.append(f"{o1}.{o2}.{o3}.{o4}")
+
+    return return_ip
+
+if args["hostname"] == None:
+    subnet = input("Enter an subnet.\nSyntax is: 192.168.0.x (x is unknown, and . is required.)\n\n: ")
+else:
+    subnet = args["hostname"]
+
+ip = subnet.split(".")
+ip2 = []
+for i in ip:
+    if i.lower() == "x":
+        ip2.append(None)
+    else:
+        ip2.append(i)
+
+if len(ip) != 4:
+    output.warn("The IP length is invalid. (IPv6 Not supported)\n\nTry something like:\n192.168.0.x\n\n")
+    exit(1)
+elif not None in ip2:
+    output.warn("There is only an absolute IP.\n\nTry something like:\n192.168.0.x\n\n")
+    exit(2)
+else:
+    output.info("Starting IP Generation.. (This may take some time)")
+    ip_list = gen_ip(ip2)
+    output.info(f"IP list length: {len(ip_list)}")
+    output.info("Starting IP Pinging.. (This may take some time)")
+    output.info("Press ^C to skip to results")
+    targets = []
+
+    try:
+        output.info(f"Trying method {args["method"]}")
+        for i in ip_list:
+            print("\033[7m" + f"Testing {i}" + "\033[0m")
+            value = check_online(i)
+            if value:
+                clear_line()
+                print(f"-> {i} is Up!")
+                targets.append(i)
+            else:
+                clear_line()
+    except KeyboardInterrupt:
+        clear_line()
+        print("\n\n")
+        
+    clear_line()
+    print("-----------")
+    print("Found Hosts")
+    print("-----------")
+    for i in range(len(targets)):
+        print(f"{i+1}.  {targets[i]}")
