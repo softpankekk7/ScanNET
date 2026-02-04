@@ -34,16 +34,17 @@ It is **not** intended for unauthorized internet-wide scanning or opportunistic 
 
 ## Acknowledgments & Licensing
 
-### `ping()` implementation
-- Source: https://stackoverflow.com/a/32684938  
+### `ping()`
+- Source: [Pinging servers in Python](https://stackoverflow.com/a/32684938)
 - Author: ePi272314 and community contributors  
 - Retrieved: 2026-02-04  
 - License: **CC BY-SA 4.0**
 
 ### Port reference material
-- Wikipedia: *List of TCP and UDP port numbers*
+- Wikipedia: [List of TCP and UDP port numbers](https://en.wikipedia.org/wiki/List_of_TCP_and_UDP_port_numbers)
 - Public reference material gathered for common port groupings
 - Retrieved: 2026-02-04
+- License: **CC BY-SA 3.0** / **CC BY-SA 4.0GFDL**
 
 These sources were used for reference and educational purposes. Original licensing terms apply where relevant.  
 For a full, detailed list, please review the source code.
