@@ -146,7 +146,7 @@ elif port_type == "bigcommon":
         9, 101, 137, 138, 139, 156    # Misc
     ]
 else:
-    output.error("Invalid port list type.\n\nAvailible types: \n bigcommon, common, minimal")
+    output.error("Invalid port list type.\n\nAvailible types: \n bigcommon, common, minimal, web, remote, mail")
 
 def clear_line():
    sys.stdout.write('\033[A' + '\033[K')
