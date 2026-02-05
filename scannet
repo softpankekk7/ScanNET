@@ -16,8 +16,12 @@ import platform
 import subprocess
 import sys
 import socket
+import re
+import ssl
+import requests
+import websockets
 
-version = 1.0
+version = 1.2
 
 args = {
     "hostname": None,
@@ -38,8 +42,8 @@ def help_me(long):
     print("--version  :  Version #")
     print("--hostname :  Set hostname")
     print("-t         :  Timeout for scanning (sec)")
-    print("-m         :  Method of scanning [ping/socket]")
-    print("-p         :  Scan ports [minimal/common/bigcommon/web/remote/mail]")
+    print("-m         :  Method of scanning [ping/socket/wsping/ssl/arp/http/api/rdns/dnsr]")
+    print("-p         :  Scan ports [minimal/common/bigcommon/web/remote/mail/brute/brute2/brute3/bigbrute]")
     print("-P         :  pipeMode (Suppress INFO & WARN for automation)")
 
     if long:
@@ -65,6 +69,22 @@ def help_me(long):
             113, 9, 101, 
             137, 138, 139, 
             156""")
+        print("brute   : EVERY port (1-1023)")
+        print("brute2  : EVERY port (1023-49141)")
+        print("brute3  : EVERY port (49141-65535)")
+        print("bigbrute: EVERY port (1-65535)")
+        print("========================")
+        print("Scan method names")
+        print("(* means it needs a port type)")
+        print("[ping]        - Ping via subprocess")
+        print("[socket]*     - Try and connect via socket")
+        print("[wsping]*     - Ping via websocket")
+        print("[ssl]   *     - Attempt a SSL connection")
+        print("[arp]         - Try looking up the arp table (LOCAL NET ONLY)")
+        print("[http]  *     - Ping via web requests")
+        print("[api]         - Use an API to ping")
+        print("[rdns]        - Try and Reverse DNS")
+        print("[dnsr]        - Look up the DNS Resolve")
         print("========================")
 
         
@@ -103,7 +123,7 @@ class output:
         if not args["pipeMode"]:
             print("\033[34m" + "INFO  " + "\033[0m" + ":  " + string)
 
-port_type = "minimal"
+port_type = args["ports"]
 
 if port_type == "minimal":
     common_ports = [
@@ -145,6 +165,30 @@ elif port_type == "bigcommon":
         53, 139, 135, 1024, 389, 113, # Misc
         9, 101, 137, 138, 139, 156    # Misc
     ]
+elif port_type == "brute":
+    output.info("Generating bruteforce list..")
+    common_ports = []
+    for port in range(1,1024):
+        common_ports.append(port)
+    output.info("Done!")
+elif port_type == "brute2":
+    output.info("Generating bruteforce list..")
+    common_ports = []
+    for port in range(1023, 49142):
+        common_ports.append(port)
+    output.info("Done!")
+elif port_type == "brute3":
+    output.info("Generating bruteforce list.. (This may take time)")
+    common_ports = []
+    for port in range(49141, 65536):
+        common_ports.append(port)
+    output.info("Done!")
+elif port_type == "bigbrute":
+    output.info("Generating bruteforce list.. (This may take time)")
+    common_ports = []
+    for port in range(1, 65536):
+        common_ports.append(port)
+    output.info("Done!")
 else:
     output.error("Invalid port list type.\n\nAvailible types: \n bigcommon, common, minimal, web, remote, mail")
 
@@ -159,6 +203,76 @@ def ping(host):
 
     command = ['ping', param, '1', host, timeout, str(args["timeout"]), size, "1"]
     return subprocess.call(command, stdout=subprocess.DEVNULL) == 0
+
+def dns_resolve(hostname):
+    try:
+        ip = socket.gethostbyname(hostname)
+        return ip is not None
+    except:
+        return False
+    
+def rev_dns(ip):
+    try:
+        hostname = socket.gethostbyaddr(ip)
+        return True
+    except:
+        return False
+    
+def api_ping(ip):
+    try:
+        response = requests.get(
+            f'https://api.hackertarget.com/nping/?q={ip}',
+            timeout=args["timeout"]
+        )
+        return 'is alive' in response.text.lower()
+    except:
+        return False
+    
+def http_ping(ip):
+    methods = ['HEAD', 'GET', 'OPTIONS']
+    for method in methods:
+        try:
+            response = requests.request(
+                method, 
+                f'http://{ip}', 
+                timeout=args["timeout"]
+            )
+            return True
+        except:
+            continue
+    return False
+
+def arp_up(ip):
+    try:
+        result = subprocess.run(['arp', '-n', ip], 
+                              capture_output=True, 
+                              text=True)
+        return bool(re.search(r'([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}', 
+                            result.stdout))
+    except:
+        return False
+
+def websock_ping(ip):
+    try:
+        for port in common_ports:
+            ws = websockets.create_connection(
+                f'ws://{ip}:{port}',
+                timeout=args["timeout"]
+            )
+            ws.close()
+            return True
+    except:
+        return False
+
+def check_ssl(ip):
+    try:
+        for port in common_ports:
+            context = ssl.create_default_context()
+            with socket.create_connection((ip, port), timeout=args["timeout"]) as sock:
+                with context.wrap_socket(sock, server_hostname=ip) as ssock:
+                    return True
+    except:
+        return False
 
 def socket_up(ip):
     try:
@@ -178,13 +292,30 @@ def socket_up(ip):
         return False
 
 def check_online(host):
-    if args["method"].lower() == "ping":
-        return ping(host)
-    elif args["method"].lower() == "socket":
-        return socket_up(host)
-    else:
-        output.error("Invalid host checking method.\n\nAvailible Methods: \n ping, socket")
-        exit(3)
+    try:
+        if args["method"].lower() == "ping":
+            return ping(host)
+        elif args["method"].lower() == "socket":
+            return socket_up(host)
+        elif args["method"].lower() == "wsping":
+            return websock_ping(host)
+        elif args["method"].lower() == "ssl":
+            return check_ssl(host)
+        elif args["method"].lower() == "arp":
+            return arp_up(host)
+        elif args["method"].lower() == "http":
+            return http_ping(host)
+        elif args["method"].lower() == "api":
+            return api_ping(host)
+        elif args["method"].lower() == "rdns":
+            return rev_dns(host)
+        elif args["method"].lower() == "dnsr":
+            return dns_resolve(host)
+        else:
+            output.error("Invalid host checking method.\n\nAvailible Methods: \n ping, socket, wsping, ssl, arp, http, api, rdns, dnsr")
+            exit(3)
+    except Exception as e:
+        raise e
 
 def gen_ip(ip_filter):
     ranges = []
